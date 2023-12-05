@@ -31,3 +31,5 @@ unobserve() // stops observing the related property
 mpv.process       // process from child_process.spawn
 mpv.socket        // raw tcp socket
 ```
+
+test
