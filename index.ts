@@ -47,8 +47,8 @@ type MPVArgs = {
 enum MPV_STATUS {
   stopped = "stopped",
   starting = "starting",
-  started = "started",
-  errored = "errored",
+  STARTED = "started",
+  ERRORED = "errored",
 }
 
 async function Mpv({
@@ -110,6 +110,7 @@ async function Mpv({
   // .unref()
   socket.setEncoding("utf8").on("error", error).on("data", data);
 
+  // @ts-ignore
   prexit.last(end);
 
   await start();
@@ -131,7 +132,7 @@ async function Mpv({
   }
 
   function error(_: unknown) {
-    mpv.status === MPV_STATUS.started && kill();
+    mpv.status === MPV_STATUS.STARTED && kill();
   }
 
   async function start(emit?: boolean) {
@@ -161,14 +162,14 @@ async function Mpv({
       });
 
       ready();
-      mpv.status = MPV_STATUS.started;
+      mpv.status = MPV_STATUS.STARTED;
       emit && mpv.emit("restarted");
       mpv.process.on("close", () => {
-        mpv.status = MPV_STATUS.started;
+        mpv.status = MPV_STATUS.STARTED;
         start(true).catch((e) => mpv.emit("error", e));
       });
     } catch (error) {
-      mpv.status = MPV_STATUS.errored;
+      mpv.status = MPV_STATUS.ERRORED;
       throw error;
     }
   }
@@ -185,10 +186,8 @@ async function Mpv({
     socket.on("error", errored);
     socket.on("close", close);
 
-    setTimeout(() => {
-      assert(socketPath?.length, "Invalid socket path.");
-      socket.connect(socketPath);
-    }, 10);
+    assert(socketPath?.length, "Invalid socket path.");
+    socket.connect(socketPath);
 
     return promise.finally(() => {
       socket.off("error", errored);
