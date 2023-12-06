@@ -1,4 +1,5 @@
-import cp, { SpawnOptions } from "child_process";
+import assert from "assert";
+import cp, { ChildProcess, SpawnOptions } from "child_process";
 import events from "events";
 import fs from "fs";
 
@@ -26,7 +27,10 @@ type Commands =
   | ["loadfile", url: string]
   | ["srcipt-mesasge", ...unknown[]]
   | ["set_property", ...unknown[]]
-  | ["get_property", ...unknown[]];
+  | ["get_property", ...unknown[]]
+  // mpvvious commands
+  | ["mpvacious-sub-seek-back"]
+  | ["mpvacious-sub-seek-forward"];
 
 type MpvArgsParameter = MpvArgsToStr<MPVArgs>;
 
@@ -34,7 +38,18 @@ type MPVArgs = {
   ["audio-display"]: "no" | string;
   ["no-video"]: null;
   ["no-audio"]: null;
+  /**
+   * https://mpv.io/manual/stable/#options-window-minimized
+   */
+  ["window-minimized"]: "yes" | "no";
 };
+
+enum MPV_STATUS {
+  stopped = "stopped",
+  starting = "starting",
+  started = "started",
+  errored = "errored",
+}
 
 async function Mpv({
   args = [],
@@ -55,13 +70,13 @@ async function Mpv({
   const socket = new net.Socket();
   const mpv = Object.assign(new events.EventEmitter(), {
     end,
-    status: "stopped",
+    status: MPV_STATUS.stopped,
     set: (...args: unknown[]) => command("set_property", ...args),
     get: (...args: unknown[]) => command("get_property", ...args),
     command,
     observe,
     socket,
-    process: null,
+    process: null as ChildProcess | null,
   });
 
   const observers = new Map(),
@@ -82,14 +97,18 @@ async function Mpv({
   ];
 
   defaults.forEach(
-    (a) => args.some((x) => x.startsWith(a.split("=")[0])) || args.push(a),
+    (a) =>
+      args.some((x) => x.startsWith(a.split("=")[0])) ||
+      args.push(a as MpvArgsParameter),
   );
 
   const socketPath = args
     .find((x) => x.startsWith(socketArg))
     ?.slice(socketArg.length + 1);
 
-  socket.unref().setEncoding("utf8").on("error", error).on("data", data);
+  // Since bun doesn't support this: https://bun.sh/docs/runtime/nodejs-apis
+  // .unref()
+  socket.setEncoding("utf8").on("error", error).on("data", data);
 
   prexit.last(end);
 
@@ -98,6 +117,10 @@ async function Mpv({
   return mpv;
 
   function end() {
+    if (!mpv.process) {
+      return;
+    }
+
     mpv.process.removeAllListeners();
     kill();
     mpv.process.unref();
@@ -107,14 +130,14 @@ async function Mpv({
     mpv.process && !mpv.process.killed && mpv.process.kill();
   }
 
-  function error(e) {
-    mpv.status === "started" && kill();
+  function error(_: unknown) {
+    mpv.status === MPV_STATUS.started && kill();
   }
 
   async function start(emit?: boolean) {
     if (mpv.status !== "stopped") return;
 
-    mpv.status = "starting";
+    mpv.status = MPV_STATUS.starting;
 
     try {
       mpv.process && end();
@@ -124,12 +147,12 @@ async function Mpv({
       });
 
       let stderr = "";
-      mpv.process.stderr.setEncoding("utf8");
-      mpv.process.stderr.on("data", (x) => (stderr += x));
+      mpv.process.stderr?.setEncoding("utf8");
+      mpv.process.stderr?.on("data", (x) => (stderr += x));
 
       await new Promise((resolve, reject) => {
-        mpv.process.once("error", reject);
-        mpv.process.once("close", (code, signal) =>
+        mpv.process!.once("error", reject);
+        mpv.process!.once("close", (code, signal) =>
           reject(
             Object.assign(new Error(stderr || "closed"), { code, signal }),
           ),
@@ -138,14 +161,14 @@ async function Mpv({
       });
 
       ready();
-      mpv.status = "started";
+      mpv.status = MPV_STATUS.started;
       emit && mpv.emit("restarted");
       mpv.process.on("close", () => {
-        mpv.status = "stopped";
+        mpv.status = MPV_STATUS.started;
         start(true).catch((e) => mpv.emit("error", e));
       });
     } catch (error) {
-      mpv.status = "errored";
+      mpv.status = MPV_STATUS.errored;
       throw error;
     }
   }
@@ -161,7 +184,11 @@ async function Mpv({
     socket.once("ready", resolve);
     socket.on("error", errored);
     socket.on("close", close);
-    socket.connect(socketPath);
+
+    setTimeout(() => {
+      assert(socketPath?.length, "Invalid socket path.");
+      socket.connect(socketPath);
+    }, 10);
 
     return promise.finally(() => {
       socket.off("error", errored);
