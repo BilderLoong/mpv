@@ -14,7 +14,7 @@ interface Request {
   id: number;
   resolve: (value?: unknown) => void;
   reject: (reason?: unknown) => void;
-  args: Commands;
+  args: Command;
 }
 
 type MpvArgsToStr<T extends Record<string, string | number | null>> = {
@@ -23,14 +23,19 @@ type MpvArgsToStr<T extends Record<string, string | number | null>> = {
     : `=${T[K]}`}`;
 }[keyof T];
 
-type Commands =
+type MpvaciousCommnad =
+  | "mpvacious-copy-sub-to-clipboard"
+  | "mpvacious-sub-seek-forward";
+
+type Command =
   | ["loadfile", url: string]
-  | ["srcipt-mesasge", ...unknown[]]
+  | ["sub-add", url: string]
+  | ["script-message", ...MpvaciousCommnad[]]
   | ["set_property", ...unknown[]]
-  | ["get_property", ...unknown[]]
-  // mpvvious commands
-  | ["mpvacious-sub-seek-back"]
-  | ["mpvacious-sub-seek-forward"];
+  | ["get_property", ...unknown[]];
+// mpvvious commands
+// | ["mpvacious-sub-seek-back"]
+// | ["mpvacious-sub-seek-forward"];
 
 type MpvArgsParameter = MpvArgsToStr<MPVArgs>;
 
@@ -260,7 +265,7 @@ async function Mpv({
         mpv.emit("error", Object.assign(new Error(x.error), x))
       );
 
-    const request = requests.get(x.request_id);
+    const request = requests.get(x.request_id)!;
     requests.delete(x.request_id);
 
     x.error === "success"
@@ -272,7 +277,7 @@ async function Mpv({
         );
   }
 
-  function command(...args: Commands) {
+  function command(...args: Command) {
     return new Promise((resolve, reject) => {
       const id = ++requestId;
       const request: Request = {
@@ -286,6 +291,7 @@ async function Mpv({
             command: args.filter((x) => x !== undefined),
           }) + "\n",
       };
+      console.log(request);
 
       socket.readyState === "open" ? write(request) : queue.push(request);
     });
