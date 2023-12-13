@@ -25,7 +25,22 @@ type MpvArgsToStr<T extends Record<string, string | number | null>> = {
 
 type MpvaciousCommnad =
   | "mpvacious-copy-sub-to-clipboard"
-  | "mpvacious-sub-seek-forward";
+  | "mpvacious-autocopy-toggle"
+  | "mpvacious-animated-snapshot-toggle"
+  | "mpvacious-secondary-sid-toggle"
+  | "mpvacious-secondary-sid-prev"
+  | "mpvacious-secondary-sid-next"
+  | "mpvacious-menu-open"
+  | "mpvacious-export-note"
+  | "mpvacious-update-last-note"
+  | "mpvacious-overwrite-last-note"
+  | "mpvacious-sub-seek-back"
+  | "mpvacious-sub-seek-forward"
+  | "mpvacious-sub-seek-back-pause"
+  | "mpvacious-sub-seek-forward-pause"
+  | "mpvacious-sub-rewind"
+  | "mpvacious-sub-replay"
+  | "mpvacious-sub-play-up-to-next";
 
 type Command =
   | ["loadfile", url: string]
@@ -33,9 +48,6 @@ type Command =
   | ["script-message", ...MpvaciousCommnad[]]
   | ["set_property", ...unknown[]]
   | ["get_property", ...unknown[]];
-// mpvvious commands
-// | ["mpvacious-sub-seek-back"]
-// | ["mpvacious-sub-seek-forward"];
 
 type MpvArgsParameter = MpvArgsToStr<MPVArgs>;
 
@@ -43,6 +55,7 @@ type MPVArgs = {
   ["audio-display"]: "no" | string;
   ["no-video"]: null;
   ["no-audio"]: null;
+  ["script"]: string;
   /**
    * https://mpv.io/manual/stable/#options-window-minimized
    */
@@ -154,7 +167,9 @@ async function Mpv({
 
       let stderr = "";
       mpv.process.stderr?.setEncoding("utf8");
-      mpv.process.stderr?.on("data", (x) => (stderr += x));
+      mpv.process.stderr?.on("data", (x) => {
+        return (stderr += x);
+      });
 
       await new Promise((resolve, reject) => {
         mpv.process!.once("error", reject);
