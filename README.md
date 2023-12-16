@@ -30,3 +30,18 @@ unobserve() // stops observing the related property
 mpv.process       // process from child_process.spawn
 mpv.socket        // raw tcp socket
 ```
+
+## Troubleshooting
+
+```shell
+214 |     if (this.remotePort = port, socket.data = this, socket.timeout(this.timeout), socket.ref(), this[bunSocketInternal] = socket, this.connecting = !1, !this.#upgraded)
+215 |       this.emit("connect", this);
+216 |     Socket2.#Drain(socket);
+217 |   }
+218 |
+219 |   connect(port, host, connectListener) {
+                     ^
+error: Failed to connect
+      at connect (node:net:219:18)
+      at /home/birudo/Projects/playground/mpv_helper/packages/mpv/index.ts:212:6
+```

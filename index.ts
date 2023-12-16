@@ -2,9 +2,7 @@ import assert from "assert";
 import cp, { ChildProcess, SpawnOptions } from "child_process";
 import events from "events";
 import fs from "fs";
-
 import net from "net";
-
 import prexit from "prexit";
 
 export default Mpv;
@@ -62,8 +60,8 @@ type MPVArgs = {
   ["window-minimized"]: "yes" | "no";
 };
 
-enum MPV_STATUS {
-  stopped = "stopped",
+export enum MPV_STATUS {
+  STOPPED = "stopped",
   starting = "starting",
   STARTED = "started",
   ERRORED = "errored",
@@ -88,7 +86,7 @@ async function Mpv({
   const socket = new net.Socket();
   const mpv = Object.assign(new events.EventEmitter(), {
     end,
-    status: MPV_STATUS.stopped,
+    status: MPV_STATUS.STOPPED,
     set: (...args: unknown[]) => command("set_property", ...args),
     get: (...args: unknown[]) => command("get_property", ...args),
     command,
@@ -171,15 +169,25 @@ async function Mpv({
         return (stderr += x);
       });
 
-      await new Promise((resolve, reject) => {
-        mpv.process!.once("error", reject);
+      await new Promise<void>((resolve, reject) => {
+        // It seems bun have bug on firing spawn event.
+        if (process.versions.bun) {
+          resolve();
+        }
+        mpv.process!.on("spawn", () => {
+          resolve();
+        });
+        mpv.process!.once("error", () => {
+          reject();
+        });
         mpv.process!.once("close", (code, signal) =>
           reject(
             Object.assign(new Error(stderr || "closed"), { code, signal }),
           ),
         );
-        connect().then(resolve, reject);
       });
+
+      await connect();
 
       ready();
       mpv.status = MPV_STATUS.STARTED;
@@ -207,6 +215,7 @@ async function Mpv({
     socket.on("close", close);
 
     assert(socketPath?.length, "Invalid socket path.");
+    // In bun, the socket path seems needed to exist before connect, otherwise there will be an error (refer to the README's troubleshooting section).
     socket.connect(socketPath);
 
     return promise.finally(() => {
